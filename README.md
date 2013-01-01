@@ -3,6 +3,11 @@ imgsort
 
 Sorts images by aspect ratio, optionally using a per-folder rules file (named ".imgsortrc") for destination folder names
 
-## INPROGRESS
+Usage
+-----
 
-Actually apply the rules file
+    imgsort [options] <image>...
+
+    Options:
+        -h, --help      Show this screen
+        -v, --verbose   Verbose output

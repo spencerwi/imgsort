@@ -27,6 +27,7 @@ rescue Docopt::Exit => e
     exit 1
 end
 
+# An image class to handle aspect ratio calc and sorting
 class Image
     def initialize(filename)
         @filename = filename
@@ -46,43 +47,62 @@ class Image
     end
 
     # Move image into the appropriate aspectratio directory
-    def sort(verbose)
-        if not File::exists? aspectratio 
-            if File::directory? aspectratio
-                puts "#{aspectratio} is not a directory. Skipping #{@filename}." if verbose
+    def sort(rulesobj, verbose)
+        targetdir = rulesobj[aspectratio] || rulesobj["default"] 
+        if not File::exists? targetdir
+            if File::directory? targetdir
+                puts "  #{targetdir} exists but is not a directory. Skipping #{@filename}." if verbose
                 return
             else
-                puts "  creating directory #{aspectratio}" if verbose
-                FileUtils.mkdir aspectratio
+                puts "  creating directory #{targetdir}" if verbose
+                FileUtils.mkdir targetdir
             end
         end
 
         begin
-            puts "  moving #{@filename} to #{aspectratio}" if verbose
-            FileUtils.move(@filename, aspectratio)
+            puts "  moving #{@filename} to #{targetdir}" if verbose
+            FileUtils.move(@filename, targetdir)
         rescue
-            puts "  Unsuccessfully tried to move #{@filename} to #{aspectratio}" if verbose
+            puts "  Unsuccessfully tried to move #{@filename} to #{targetdir}" if verbose
             return
         end
     end
 end
 
+##
+# Tries to get sorting rules from a configuration file. 
+#   If the file doesn't exist, or it contains an empty config, return a default 
+#   ruleset.
+# @return hash a hash containing the sorting rules
+##
 def getSortRules()
     configFilePath = File.join(File.dirname(__FILE__), ".imgsortrc") 
     if File::exists? configFilePath
-        read_config(configFilePath)
+        rules = read_config(configFilePath)  
+        if rules then return rules end
+        # If read_config returned an empty object, return the default ruleset 
+        {
+            "16x9"    => "16x9",
+            "16x10"   => "16x10",
+            "4x3"     => "4x3",
+            "default" => "misc"
+        }
     else
         # Default rules recognize 16x9, 16x10, and 4x3 -- common ratios.
         # Other stuff gets put into "misc"
         {
-            "16x9" => "16x9",
-            "16x10" => "16x10",
-            "4x3" => "4x3",
+            "16x9"    => "16x9",
+            "16x10"   => "16x10",
+            "4x3"     => "4x3",
             "default" => "misc"
         }
     end
 end
 
+## 
+# Reads a sorting rules configuration file and returns rules if any.
+# @return hash a hash containing the sorting rules (or null)
+##
 def read_config(filename)
     # Rules file syntax is (one rule per line):
     #     WxH: Folder_Name
@@ -100,6 +120,9 @@ def read_config(filename)
     return rules
 end
 
+# Okay, now use that method to get the sorting rules
+rulesobj = getSortRules()
+
 # For each image supplied on the CLI
 opts['<image>'].each do |imgfile|
     begin
@@ -109,14 +132,15 @@ opts['<image>'].each do |imgfile|
             when :gif, :jpg, :jpeg, :png # only operate on images
                 img = Image.new(imgfile) # if it is indeed an image, create a new Image object
                 puts "Sorting #{img.filename}" if opts['--verbose'] 
-                img.sort(opts['--verbose']) # and perform the sort/move
+                img.sort(rulesobj, opts['--verbose']) # and perform the sort/move
             else
                 puts "#{imgfile} is not an image. Skipping." if opts['--verbose']
             end
         else
             puts "#{imgfile} doesn't exist. Skipping." if opts['--verbose']
         end
-    rescue
+    rescue # If we get an exception, skip the image and move on.
+        puts "Error encountered with #{imgfile}. Moving on."
         next
     end
 end
