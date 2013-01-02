@@ -126,15 +126,17 @@ rulesobj = getSortRules()
 # For each image supplied on the CLI
 opts['<image>'].each do |imgfile|
     begin
-        if File::exists? imgfile # check to ensure that the image exists
-            filetype = FastImage.type(imgfile) # check the file type
+        # Only operate on files that exist and are not directories
+        if File::exists? imgfile and not File::directory? imgfile 
+            # Only operate on image files
+            filetype = FastImage.type(imgfile) 
             case filetype 
-            when :gif, :jpg, :jpeg, :png # only operate on images
-                img = Image.new(imgfile) # if it is indeed an image, create a new Image object
-                puts "Sorting #{img.filename}" if opts['--verbose'] 
-                img.sort(rulesobj, opts['--verbose']) # and perform the sort/move
-            else
-                puts "#{imgfile} is not an image. Skipping." if opts['--verbose']
+                when :gif, :jpg, :jpeg, :png # only operate on images
+                    img = Image.new(imgfile) # if it is indeed an image, create a new Image object
+                    puts "Sorting #{img.filename}" if opts['--verbose'] 
+                    img.sort(rulesobj, opts['--verbose']) # and perform the sort/move
+                else
+                    puts "#{imgfile} is not an image. Skipping." if opts['--verbose']
             end
         else
             puts "#{imgfile} doesn't exist. Skipping." if opts['--verbose']
