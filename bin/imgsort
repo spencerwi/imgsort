@@ -10,7 +10,7 @@ doc = <<DOCOPT
 Sorts a set of image files into folders by their aspect ratios
 
 Usage: 
-    #{__FILE__} [options] <image>...
+    #{File.basename __FILE__} [options] <image>...
 
 Options:
     -h, --help      Show this screen
