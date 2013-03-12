@@ -69,6 +69,7 @@ class Image
             return
         end
     end
+
 end
 
 ##
@@ -126,14 +127,19 @@ end
 def sort_image(imgfile, verbose=false)
     begin
         rulesobj = getSortRules(File.dirname imgfile)
-        # Only operate on files that exist and are not directories
+        # Check ignorepattern first
+        if rulesobj.include? 'ignore' and imgfile.match rulesobj['ignore']
+            puts "Ignoring #{imgfile}" if verbose
+            return
+        end
+        # Only operate on files that exist and are not directories or tempfiles
         if File::exists? imgfile and not File::directory? imgfile 
             # Only operate on image files
             filetype = FastImage.type(imgfile) 
             case filetype 
                 when :gif, :jpg, :jpeg, :png # only operate on images
                     img = Image.new(imgfile) # if it is indeed an image, create a new Image object
-                    puts "Sorting #{img.filename}" if verbose
+                    puts "Sorting #{img.filename}" if verbose 
                     img.sort(rulesobj, verbose) # and perform the sort/move
                 else
                     puts "#{imgfile} is not an image. Skipping." if verbose
@@ -156,7 +162,6 @@ if opts['--daemon']
     t = Thread.new do
         i.each_event do |event|
             if event.name == ".imgsortrc" then next end
-            puts "sorting #{event.name}"
             sort_image File.join opts['<directory>'], event.name
         end
     end
