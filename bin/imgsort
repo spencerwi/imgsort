@@ -162,7 +162,7 @@ if opts['--daemon']
     t = Thread.new do
         i.each_event do |event|
             if event.name == ".imgsortrc" then next end
-            sort_image File.join opts['<directory>'], event.name
+            sort_image File.join(opts['<directory>'], event.name), opts['--verbose']
         end
     end
     i.add_watch(opts['<directory>'], Inotify::MOVED_TO | Inotify::CLOSE )
