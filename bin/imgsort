@@ -165,7 +165,7 @@ if opts['--daemon']
             sort_image File.join opts['<directory>'], event.name
         end
     end
-    i.add_watch(opts['<directory>'], Inotify::CREATE | Inotify::MOVED_TO | Inotify::ACCESS)
+    i.add_watch(opts['<directory>'], Inotify::MOVED_TO | Inotify::CLOSE )
 
     t.join
 else
