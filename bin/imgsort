@@ -11,65 +11,89 @@ doc = <<DOCOPT
 Sorts a set of image files into folders by their aspect ratios
 
 Usage: 
-    #{File.basename __FILE__} [options] <directory>
+  #{File.basename __FILE__} [options] <directory>
 
 Options:
-    -h, --help      Show this screen
-    -v, --verbose   Verbose output
-    -d, --daemon    Start as a daemon in the specified directory, autosorting new files.
+  -h, --help      Show this screen
+  -v, --verbose   Verbose output
+  -d, --daemon    Start as a daemon in the specified directory, autosorting new files.
 
 DOCOPT
 
 # Fetch command-line args
 opts = {}
 begin 
-    opts = Docopt::docopt(doc)
+  opts = Docopt::docopt(doc)
 rescue Docopt::Exit => e
-    puts e.message
-    exit 1
+  puts e.message
+  exit 1
+end
+
+# Exception class for non-image files
+class NonImageFileError < StandardError 
 end
 
 # An image class to handle aspect ratio calc and sorting
 class Image
-    def initialize(filename)
-        @filename = filename
-        @width, @height = FastImage.size(filename)
+  def initialize(filename)
+    raise NonImageFileError, "#{filename} is not an image" unless [:gif, :jpg, :jpeg, :png].include? FastImage.type(filename)
+    @filename = filename
+    @width, @height = FastImage.size(filename)
+  end
+
+  attr_reader :filename, :width, :height
+
+  # Get image aspect ratio
+  def aspectratio
+    ratio = Rational(@width, @height) # Ruby reduces fractions for us! How handy.
+    if ratio == Rational(16, 10) # 16x10 is a special case, since we don't want it reduced down to 8x5
+      return "16x10"
+    else
+      return "#{ratio.numerator}x#{ratio.denominator}" # Return the aspect ratio in WxH format
+    end
+  end
+
+  # Move image into the appropriate aspectratio directory
+  def sort(rulesobj, verbose)
+    # If this file's filename matches the ignorepattern, skip it.
+    return if rulesobj.include? 'ignore' and @filename.match rulesobj['ignore']
+
+    targetdir = File.join File.dirname(@filename), (rulesobj[aspectratio] || rulesobj["default"] )
+    if not File::exists? targetdir
+      if File::directory? targetdir
+        puts "  #{targetdir} exists but is not a directory. Skipping #{@filename}." if verbose
+        return
+      else
+        puts "  creating directory #{targetdir}" if verbose
+        FileUtils.mkdir targetdir
+      end
     end
 
-    attr_reader :filename, :width, :height
-
-    # Get image aspect ratio
-    def aspectratio
-        ratio = Rational(@width, @height) # Ruby reduces fractions for us! How handy.
-        if ratio == Rational(16, 10) # 16x10 is a special case, since we don't want it reduced down to 8x5
-            return "16x10"
-        else
-            return "#{ratio.numerator}x#{ratio.denominator}" # Return the aspect ratio in WxH format
-        end
+    begin
+      puts "  moving #{@filename} to #{targetdir}"
+      FileUtils.move(@filename, targetdir)
+    rescue
+      puts "  Unsuccessfully tried to move #{@filename} to #{targetdir}" if verbose
+      return
     end
+  end
+end
 
-    # Move image into the appropriate aspectratio directory
-    def sort(rulesobj, verbose)
-        targetdir = File.join File.dirname(@filename), (rulesobj[aspectratio] || rulesobj["default"] )
-        if not File::exists? targetdir
-            if File::directory? targetdir
-                puts "  #{targetdir} exists but is not a directory. Skipping #{@filename}." if verbose
-                return
-            else
-                puts "  creating directory #{targetdir}" if verbose
-                FileUtils.mkdir targetdir
-            end
-        end
-
-        begin
-            puts "  moving #{@filename} to #{targetdir}" if verbose
-            FileUtils.move(@filename, targetdir)
-        rescue
-            puts "  Unsuccessfully tried to move #{@filename} to #{targetdir}" if verbose
-            return
-        end
-    end
-
+## 
+# Reads a sorting rules configuration file and returns rules if any.
+# @return hash a hash containing the sorting rules (or null)
+##
+def read_config(filename)
+  # Rules file syntax is (one rule per line):
+  #     WxH: Folder_Name
+  #   for example:
+  #     16x9: foo
+  rules = {}
+  File.readlines(filename).each do |line|
+    ratio, folder = line.split(':').map { |e| e.strip() }
+    rules[ratio] = folder
+  end
+  return rules
 end
 
 ##
@@ -78,100 +102,49 @@ end
 #   ruleset.
 # @return hash a hash containing the sorting rules
 ##
-def getSortRules(dir=File.dirname(__FILE__))
-    configFilePath = File.join(dir, ".imgsortrc") 
-    if File::exists? configFilePath
-        rules = read_config(configFilePath)  
-        if rules then return rules end
-        # If read_config returned an empty object, return the default ruleset 
-        {
-            "16x9"    => "16x9",
-            "16x10"   => "16x10",
-            "4x3"     => "4x3",
-            "default" => "misc"
-        }
-    else
-        # Default rules recognize 16x9, 16x10, and 4x3 -- common ratios.
-        # Other stuff gets put into "misc"
-        {
-            "16x9"    => "16x9",
-            "16x10"   => "16x10",
-            "4x3"     => "4x3",
-            "default" => "misc"
-        }
-    end
+def get_sort_rules(dir=File.dirname(__FILE__))
+  # Default rules recognize 16x9, 16x10, and 4x3 -- common ratios.
+  # Other stuff gets put into "misc"
+  rules = {
+    "16x9"    => "16x9",
+    "16x10"   => "16x10",
+    "4x3"     => "4x3",
+    "default" => "misc"
+  }
+  # By default, per-folder sorting roles are in that folder, plus ".imgsortrc"
+  configFilePath = File.join(dir, ".imgsortrc") 
+  if File::exists?(configFilePath) then rules = read_config(configFilePath) or rules end
+  return rules
 end
 
-## 
-# Reads a sorting rules configuration file and returns rules if any.
-# @return hash a hash containing the sorting rules (or null)
-##
-def read_config(filename)
-    # Rules file syntax is (one rule per line):
-    #     WxH: Folder_Name
-    #   for example:
-    #     16x9: foo
-    rules = {}
-    File.open(filename, 'r') do |rcfile|
-        while line = rcfile.gets
-            ratio, folder = line.split(':')
-            ratio = ratio.strip
-            folder = folder.strip
-            rules[ratio] = folder
-        end
-    end
-    return rules
-end
 
 
 def sort_image(imgfile, verbose=false)
-    begin
-        rulesobj = getSortRules(File.dirname imgfile)
-        # Check ignorepattern first
-        if rulesobj.include? 'ignore' and imgfile.match rulesobj['ignore']
-            puts "Ignoring #{imgfile}" if verbose
-            return
-        end
-        # Only operate on files that exist and are not directories or tempfiles
-        if File::exists? imgfile and not File::directory? imgfile 
-            # Only operate on image files
-            filetype = FastImage.type(imgfile) 
-            case filetype 
-                when :gif, :jpg, :jpeg, :png # only operate on images
-                    img = Image.new(imgfile) # if it is indeed an image, create a new Image object
-                    puts "Sorting #{img.filename}" if verbose 
-                    img.sort(rulesobj, verbose) # and perform the sort/move
-                else
-                    puts "#{imgfile} is not an image. Skipping." if verbose
-            end
-        else
-            puts "#{imgfile} doesn't exist. Skipping." if verbose
-        end
-    rescue Exception => e# If we get an exception, skip the image and move on.
-        puts "Error encountered with #{imgfile}. Moving on."
-        puts e.message
-        puts e.backtrace.inspect
-    end
+  begin
+    rulesobj = get_sort_rules(File.dirname(imgfile))
+    Image.new(imgfile).sort(rulesobj, verbose) # Sort the current file
+  rescue NonImageFileError => e
+    puts "#{imgfile} is not an image. Skipping."
+  rescue Exception => e # If we get an exception, skip the image and move on.
+    puts <<-ERR 
+        Error encountered with #{imgfile}. Moving on.
+        #{e.message}
+        #{e.backtrace.inspect}
+    ERR
+  end
 end
 
-# For each image supplied on the CLI
-
 if opts['--daemon']
-    puts "Watching #{opts['<directory>']}"
-    i = Inotify.new
-    t = Thread.new do
-        i.each_event do |event|
-            if event.name == ".imgsortrc" then next end
-            sort_image File.join opts['<directory>'], event.name
-        end
-    end
-    i.add_watch(opts['<directory>'], Inotify::CREATE | Inotify::MOVED_TO | Inotify::ACCESS)
+  puts "Watching #{opts['<directory>']}"
+  i = Inotify.new
+  t = Thread.new do
+    i.each_event { |event| sort_image(File.join(opts['<directory>'], event.name), opts['--verbose']) } 
+  end
+  i.add_watch(opts['<directory>'], Inotify::CREATE | Inotify::MOVED_TO | Inotify::CLOSE_WRITE)
 
-    t.join
+  t.join
 else
-    Dir.entries(opts['<directory>']).each do |imgfile|
-        sort_image imgfile, opts['--verbose']
-    end
+  Dir.entries(opts['<directory>']).each { |imgfile| sort_image(imgfile, opts['--verbose']) }
 end
 
 # vim: set ft=ruby
