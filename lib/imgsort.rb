@@ -26,7 +26,7 @@ class Image
       if @ratio == Rational(16, 10) # 16x10 is a special case, since we don't want it reduced down to 8x5
           return "16x10"
       else
-          return "#{ratio.numerator}x#{ratio.denominator}" # Return the aspect ratio in WxH format
+          return "#{@ratio.numerator}x#{@ratio.denominator}" # Return the aspect ratio in WxH format
       end
   end
 end
@@ -42,6 +42,7 @@ class ImageSorter
           File.readlines(rcfile).each do |line|
             ratio, folder = line.split(':').map { |e| e.strip() }
             @rules[ratio] = folder
+            if @rules.include? "default" then @rules.default = @rules["default"] end
           end
       else
           @rules = {
@@ -50,6 +51,7 @@ class ImageSorter
               "4x3"     => "4x3",
               "default" => "misc"
           }
+          @rules.default = @rules["default"]
       end
     end
 
