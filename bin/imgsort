@@ -1,10 +1,9 @@
 #!/usr/bin/env ruby
 
-require 'fileutils'
 require 'rubygems'
 require 'docopt'
-require 'fastimage'
-require 'inotify'
+require 'daemons'
+require 'imgsort'
 
 doc = <<DOCOPT
 
@@ -29,122 +28,16 @@ rescue Docopt::Exit => e
   exit 1
 end
 
-# Exception class for non-image files
-class NonImageFileError < StandardError 
-end
-
-# An image class to handle aspect ratio calc and sorting
-class Image
-  def initialize(filename)
-    raise NonImageFileError, "#{filename} is not an image" unless [:gif, :jpg, :jpeg, :png].include? FastImage.type(filename)
-    @filename = filename
-    @width, @height = FastImage.size(filename)
-  end
-
-  attr_reader :filename, :width, :height
-
-  # Get image aspect ratio
-  def aspectratio
-    ratio = Rational(@width, @height) # Ruby reduces fractions for us! How handy.
-    if ratio == Rational(16, 10) # 16x10 is a special case, since we don't want it reduced down to 8x5
-      return "16x10"
-    else
-      return "#{ratio.numerator}x#{ratio.denominator}" # Return the aspect ratio in WxH format
-    end
-  end
-
-  # Move image into the appropriate aspectratio directory
-  def sort(rulesobj, verbose)
-    # If this file's filename matches the ignorepattern, skip it.
-    return if rulesobj.include? 'ignore' and @filename.match rulesobj['ignore']
-
-    targetdir = File.join File.dirname(@filename), (rulesobj[aspectratio] || rulesobj["default"] )
-    if not File::exists? targetdir
-      if File::directory? targetdir
-        puts "  #{targetdir} exists but is not a directory. Skipping #{@filename}." if verbose
-        return
-      else
-        puts "  creating directory #{targetdir}" if verbose
-        FileUtils.mkdir targetdir
-      end
-    end
-
-    begin
-      puts "  moving #{@filename} to #{targetdir}"
-      FileUtils.move(@filename, targetdir)
-    rescue
-      puts "  Unsuccessfully tried to move #{@filename} to #{targetdir}" if verbose
-      return
-    end
-  end
-end
-
-## 
-# Reads a sorting rules configuration file and returns rules if any.
-# @return hash a hash containing the sorting rules (or null)
-##
-def read_config(filename)
-  # Rules file syntax is (one rule per line):
-  #     WxH: Folder_Name
-  #   for example:
-  #     16x9: foo
-  rules = {}
-  File.readlines(filename).each do |line|
-    ratio, folder = line.split(':').map { |e| e.strip() }
-    rules[ratio] = folder
-  end
-  return rules
-end
-
-##
-# Tries to get sorting rules from a configuration file. 
-#   If the file doesn't exist, or it contains an empty config, return a default 
-#   ruleset.
-# @return hash a hash containing the sorting rules
-##
-def get_sort_rules(dir=File.dirname(__FILE__))
-  # Default rules recognize 16x9, 16x10, and 4x3 -- common ratios.
-  # Other stuff gets put into "misc"
-  rules = {
-    "16x9"    => "16x9",
-    "16x10"   => "16x10",
-    "4x3"     => "4x3",
-    "default" => "misc"
-  }
-  # By default, per-folder sorting roles are in that folder, plus ".imgsortrc"
-  configFilePath = File.join(dir, ".imgsortrc") 
-  if File::exists?(configFilePath) then rules = read_config(configFilePath) or rules end
-  return rules
-end
-
-
-
-def sort_image(imgfile, verbose=false)
-  begin
-    rulesobj = get_sort_rules(File.dirname(imgfile))
-    Image.new(imgfile).sort(rulesobj, verbose) # Sort the current file
-  rescue NonImageFileError => e
-    puts "#{imgfile} is not an image. Skipping."
-  rescue Exception => e # If we get an exception, skip the image and move on.
-    puts <<-ERR 
-        Error encountered with #{imgfile}. Moving on.
-        #{e.message}
-        #{e.backtrace.inspect}
-    ERR
-  end
-end
-
 if opts['--daemon']
-  puts "Watching #{opts['<directory>']}"
-  i = Inotify.new
-  t = Thread.new do
-    i.each_event { |event| sort_image(File.join(opts['<directory>'], event.name), opts['--verbose']) } 
-  end
-  i.add_watch(opts['<directory>'], Inotify::CREATE | Inotify::MOVED_TO | Inotify::CLOSE_WRITE)
-
-  t.join
+    begin 
+        imgsorter = InotifyImageSorter.new opts['<directory>'], opts['--verbose']
+        imgsorter.start
+    rescue Interrupt
+        exit
+    end
 else
-  Dir.entries(opts['<directory>']).each { |imgfile| sort_image(imgfile, opts['--verbose']) }
+    imgsorter = ImageSorter.new opts['<directory>'], opts['--verbose']
+    imgsorter.sort
 end
 
 # vim: set ft=ruby
