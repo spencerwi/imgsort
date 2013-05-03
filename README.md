@@ -6,8 +6,9 @@ Sorts images by aspect ratio, optionally using a per-folder rules file (named ".
 Usage
 -----
 
-    imgsort [options] <image>...
+    imgsort [options] <directory>...
 
     Options:
         -h, --help      Show this screen
         -v, --verbose   Verbose output
+        -d, --daemon    Daemonize

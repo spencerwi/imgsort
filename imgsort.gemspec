@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
     s.name          = 'imgsort'
-    s.version       = '0.4.0'
+    s.version       = '0.4.1'
     s.date          = '2013-05-02'
     s.summary       = 'imgsort'
     s.description   = "Sorts images in a given directory by aspect ratio, optionally using a per-folder rules file (named '.imgsortrc') for destination folder names."

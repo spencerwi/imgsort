@@ -1,3 +1,4 @@
+require 'logger'
 require 'fileutils'
 require 'fastimage'
 
@@ -35,6 +36,7 @@ class ImageSorter
       @directory = directory
       @verbose = verbose
       @rules = {}
+      @logger = Logger.new(STDOUT)
       rcfile = File.join(@directory, ".imgsortrc")
       if File.exists? rcfile then
           File.readlines(rcfile).each do |line|
@@ -72,19 +74,19 @@ class ImageSorter
             targetdir = File.join @directory, @rules[img.aspectratio]
             if not File::exists? targetdir
               if File::directory? targetdir
-                puts "  #{targetdir} exists but is not a directory. Skipping #{img.filename}." if @verbose
+                @logger.warn "  #{targetdir} exists but is not a directory. Skipping #{img.filename}." if @verbose
               else
-                puts "  creating directory #{targetdir}" if @verbose
+                @logger.info "  creating directory #{targetdir}" if @verbose
                 FileUtils.mkdir targetdir
               end
             end
 
-            puts "  moving #{img.filename} to #{targetdir}"
+            @logger.info "  moving #{img.filename} to #{targetdir}"
             FileUtils.move(img.filename, targetdir)
         rescue NonImageFileError
-            puts "#{imgfile} is not an image. Skipping"
+            @logger.warn "#{imgfile} is not an image. Skipping"
         rescue Exception => e
-            puts <<-ERR
+            @logger.error <<-ERR
                 Error encountered with #{imgfile}. Moving on.
                 #{e.message}
                 #{e.backtrace.inspect}
@@ -94,8 +96,11 @@ class ImageSorter
 end
 
 class InotifyImageSorter < ImageSorter
-    #TODO: rewrite using rb-inotify so that I can daemonize better.
     require 'rb-inotify'
+    def initialize(directory, logger)
+        super(directory, true)
+        @logger = logger
+    end
     def start
         @notifier = INotify::Notifier.new
         @notifier.watch(@directory, :create, :moved_to, :close_write) { |event| sort_img event.name }

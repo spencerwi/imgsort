@@ -2,8 +2,8 @@
 
 require 'rubygems'
 require 'docopt'
-require 'daemons'
 require 'imgsort'
+require 'logger'
 
 doc = <<DOCOPT
 
@@ -30,8 +30,14 @@ end
 
 if opts['--daemon']
     begin 
-        imgsorter = InotifyImageSorter.new opts['<directory>'], opts['--verbose']
+        require 'daemons'
+        logger = Logger.new File.join(opts['<directory>'], "imgsort.log")
+        imgsorter = InotifyImageSorter.new opts['<directory>'], logger
         imgsorter.start
+        Daemons.daemonize
+        loop {
+            sleep 5 
+        }
     rescue Interrupt
         exit
     end
