@@ -1,6 +1,0 @@
-source :rubygems
-
-gem "fileutils"
-gem "docopt"
-gem "fastimage"
-gem "ruby-inotify"

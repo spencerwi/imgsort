@@ -30,15 +30,12 @@ end
 
 if opts['--daemon']
     begin 
-        require 'daemons'
         logger = Logger.new File.join(opts['<directory>'], "imgsort.log")
-        imgsorter = InotifyImageSorter.new opts['<directory>'], logger
+        imgsorter = FSWatchImageSorter.new opts['<directory>'], logger
         imgsorter.start
-        Daemons.daemonize
-        loop {
-            sleep 5 
-        }
+        loop { sleep 5 }
     rescue Interrupt
+        imgsorter.stop
         exit
     end
 else
