@@ -35,7 +35,7 @@ class ImageSorter
 
     def sort_img(imgfile)
         # If this file's filename matches the ignorepattern, skip it.
-        return if @rules.include? 'ignore' and imgfile.match @rules['ignore']
+        return if @rules.include? 'ignore' and @rules['ignore'].any? {|ignorepattern| imgfile.match ignorepattern}
 
         begin
             img = Image.new imgfile

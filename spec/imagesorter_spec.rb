@@ -85,6 +85,18 @@ describe ImageSorter do
         sorter.sort
         expect(File.exists? non_image_file).to eq true
     end
+
+    it "accepts an optional list of filename-ignore-patterns, designated as an array under 'ignore' in the rules files" do
+        require 'json'
+        File.open File.join(resources_path, ".imgsortrc"), "w"  do |f|
+            f.write({"ignore" => [".gif$"]}.to_json)
+        end
+        destination_file = File.join resources_path, "160x100.gif"
+        expect(File.exists? destination_file).to eq true
+        sorter = ImageSorter.new resources_path
+        sorter.sort
+        expect(File.exists? destination_file).to eq true
+    end
 end
 
 describe FSWatchImageSorter do
